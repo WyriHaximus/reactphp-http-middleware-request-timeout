@@ -5,6 +5,7 @@ namespace WyriHaximus\React\Tests\Http\Middleware;
 use ApiClients\Tools\TestUtilities\TestCase;
 use React\EventLoop\Factory;
 use React\Promise\Deferred;
+use React\Promise\Promise;
 use function React\Promise\resolve;
 use React\Promise\Timer\TimeoutException;
 use RingCentral\Psr7\Response;
@@ -74,5 +75,30 @@ final class RequestTimeoutMiddlewareTest extends TestCase
         );
 
         self::assertTrue(true); // No timeout exception
+    }
+
+    public function testEnsurePromiseCancelMethodIsCalled(): void
+    {
+        $loop = Factory::create();
+        $middleware = new RequestTimeoutMiddleware($loop, 0.1);
+
+        $cancelled = false;
+        $this->await(
+            resolve(
+                $middleware(
+                    new ServerRequest('GET', 'https://example.com/'),
+                    function () use (&$cancelled) {
+                        return new Promise(static function ($resolve, $reject): void {
+                        }, function () use (&$cancelled): void {
+                            $cancelled = true;
+                        });
+                    }
+                )
+            )->otherwise(function (TimeoutException $timeoutException): void {
+            }),
+            $loop,
+            0.2
+        );
+        self::assertTrue($cancelled);
     }
 }
